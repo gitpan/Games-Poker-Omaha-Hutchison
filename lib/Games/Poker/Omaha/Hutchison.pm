@@ -1,6 +1,6 @@
 package Games::Poker::Omaha::Hutchison;
 
-our $VERSION = '1.01';
+our $VERSION = '1.03';
 
 use strict;
 use warnings;
@@ -62,7 +62,12 @@ sub hand_score {
 	sum($self->flush_score, $self->pair_score, $self->straight_score);
 }
 
-sub flush_score {
+use Object::Attribute::Cached
+	flush_score    => \&_flush_score,
+	pair_score     => \&_pair_score,
+	straight_score => \&_straight_score;
+
+sub _flush_score {
 	my $self   = shift;
 	my %suited = $self->by_suit;
 	my $score  = 0;
@@ -78,44 +83,111 @@ sub flush_score {
 sub pair_pts  { (0, 0, 4, 4, 4, 4, 4, 4, 4, 5,   6,   6, 7,   8, 9)[ $_[1] ] }
 sub flush_pts { (0, 0, 1, 1, 1, 1, 1, 1, 1, 1.5, 1.5, 2, 2.5, 3, 4)[ $_[1] ] }
 
-sub pair_score {
+sub _pair_score {
 	my $self = shift;
 	my %pips = $self->by_pips;
 	(sum map $self->pair_pts($_), grep @{ $pips{$_} } == 2, keys %pips) || 0;
 }
 
-sub straight_score {
+sub _straight_score {
 	my $self = shift;
-	my %part      = $self->unique_pips;
+	my %seen;
+	my @run = grep !$seen{$_}++, map $_->pips, $self->cards;
+	return Games::Poker::Omaha::Hutchison::StraightScorer->new(@run)->score;
+}
 
-	my $typecount = sub { sum map scalar @{ $part{$_} }, @_ };
-	my $straight_pts = sub {
-		my $wantcount  = shift;
-		my $givepoints = pop;
-		my @wanttype   = @_;
-		my @gap_loss   = (0, 1, 1, 2);
-		if ($typecount->(@wanttype) == $wantcount) {
-			my $gap = gap(@part{@wanttype});
-			return $givepoints - $gap_loss[$gap] if $gap <= 3;
-		}
-	};
+package Games::Poker::Omaha::Hutchison::StraightScorer;
 
-	my $score = 0;
-	$score += 2 if ($typecount->('a') == 1 && $typecount->('c') == 1);
-	$score++ if ($typecount->('a') == 1 && $typecount->('l') == 1);
-	$score += $straight_pts->(2 => qw/l x/,     2);
-	$score += $straight_pts->(2 => qw/x h c/,   4);
-	$score += $straight_pts->(3 => qw/a x h c/, 7);
-	$score += $straight_pts->(4 => qw/a x h c/, 12);
+use List::Util qw/sum max/;
+
+sub new {
+	my ($proto, @cards) = @_;
+	my $class = ref $proto || $proto;
+	bless { cards => [ sort { $b <=> $a } @cards ] }, $class;
+}
+
+sub cards { @{ shift->{cards} } }
+
+sub gap {
+	my $self = shift;
+	my @pips = sort { $b <=> $a } @_;
+	my $gap  = ($pips[0] - $pips[-1]) - (@pips - 1);
+	return $gap;
+}
+
+sub gaploss {
+	my ($self, @pips) = @_;
+	my $gap = $self->gap(@pips);
+	return (0, 1, 1, 2, (0) x 10)[$gap];
+}
+
+sub ace     { grep { $_ == 14 }           shift->cards; }
+sub court   { grep { $_ > 9 and $_ < 14 } shift->cards; }
+sub twosix  { grep { $_ > 1 and $_ < 7 }  shift->cards; }
+sub twofive { grep { $_ > 1 and $_ < 6 }  shift->cards; } 
+sub sixup   { grep { $_ > 5 }             shift->cards; }
+sub sixking { grep { $_ > 5 and $_ < 14 } shift->cards; }
+
+sub score {
+	my $self  = shift;
+	my @cards = $self->cards;
+
+	my $score = $self->_four_high_cards;
+	return $score if $score;
+
+	$score += $self->_ace_low;
+	$score += $self->_two_low_cards;
+
+	$score += my $high3 = $self->_three_high_cards;
+	return $score if $high3;
+
+	$score += $self->_two_high_cards || $self->_ace_court;
 	return $score;
 }
 
-sub gap {
-	my @pips = sort { $a <=> $b } map @$_, @_;
-	return ($pips[-1] - $pips[0]) - (@pips - 1);
+sub _two_low_cards { 
+	my $self = shift;
+	return 2 - $self->gaploss($self->twosix)
+		if $self->twosix >= 2
+		and $self->gap($self->twosix) < 4;
+}
+	
+sub _two_high_cards { 
+	my $self = shift;
+	return 4 - $self->gaploss($self->sixking)
+		if $self->sixking == 2
+		and $self->gap($self->sixking) < 4;
 }
 
-return 1;
+sub _four_high_cards { 
+	my $self = shift;
+	return 0 unless $self->sixup == 4;
+	return 0 if $self->gap($self->cards) > 3;
+	return 12 - $self->gaploss($self->cards);
+}
+
+sub _three_high_cards { 
+	my $self = shift;
+	my @cards = $self->sixup;
+	return 0 unless @cards >= 3;
+	return 7 - $self->gaploss(@cards) if @cards == 3;
+	# Want 3 from 4
+	my @hi = @cards; pop @hi;
+	my @lo = @cards; shift @lo;
+	return max($self->new(@hi)->score, $self->new(@lo)->score);
+}
+
+sub _ace_court { 
+	my $self = shift;
+	return 0 unless $self->ace and $self->court;
+	return 0 if $self->gap($self->ace, $self->court) > 3;
+	return 2 - $self->gaploss($self->ace, $self->court);
+}
+
+sub _ace_low { 
+	my $self = shift;
+	return ($self->ace and $self->twofive) ? 1 : 0
+}
 
 __END__
 

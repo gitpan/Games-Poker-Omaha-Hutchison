@@ -1,5 +1,11 @@
 Revision history 
 
+1.03 Thu Apr 1 2004
+	- Cope with 'hidden' 3 straight masquerading as overwide 4-straight (A K Q 6)
+
+1.02 Thu Apr 1 2004
+	- Split out StraightScorer 
+
 1.01 Wed Mar 31 2004
 	- Major refactorings
 
