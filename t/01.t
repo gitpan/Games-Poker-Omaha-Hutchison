@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 50;
+use Test::More tests => 54;
 use Games::Poker::Omaha::Hutchison;
 
 our %expect = (
@@ -13,12 +13,16 @@ our %expect = (
 	"As Ah 7C 2D" => [ 10, 0, 9,  1 ],
 	"KS KD 3s 6D" => [ 15, 6, 8,  1 ],
 	"AS KD QH TS" => [ 15, 4, 0,  11 ],
+
 	"Ah Kh Ad Qd" => [ 24, 8, 9, 7 ], 
 	"2h 3c 4s 5d" => [ 2, 0, 0, 2 ],  # ??
 	"2h 3c Ks Qd" => [ 6, 0, 0, 6 ],  # ??
 	"Ah 2c 3s 4d" => [ 3, 0, 0, 3 ], # ??
 	"Ad Kc Qh 2s" => [ 8, 0, 0, 8 ], # ??
 	"Kh Jc Th 6s" => [ 9, 3, 0, 6 ], # ??
+
+	# www.internettexasholdem.com/phpbb2/sat-aug-13-2005-743-pm-vp180454.html
+	"Ad 6c As 4c" => [ 12, 1, 9, 2 ], # ??
 );
 
 while (my ($hand_str, $pts) = each %expect) {

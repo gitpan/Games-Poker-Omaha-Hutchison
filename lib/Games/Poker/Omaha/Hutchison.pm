@@ -1,6 +1,6 @@
 package Games::Poker::Omaha::Hutchison;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 use strict;
 use warnings;
@@ -31,28 +31,28 @@ sub new {
 	} => $class;
 }
 
-sub cards { @{ shift->{cards} } }
+sub _cards { @{ shift->{cards} } }
 
-sub by_suit {
+sub _by_suit {
 	my $self = shift;
 	my %suited;
 	push @{ $suited{ $_->suit } }, $_->pips
-		foreach sort { $b->pips <=> $a->pips } $self->cards;
+		foreach sort { $b->pips <=> $a->pips } $self->_cards;
 	return %suited;
 }
 
-sub by_pips {
+sub _by_pips {
 	my $self = shift;
 	my %pips;
-	push @{ $pips{ $_->pips } }, $_->suit foreach $self->cards;
+	push @{ $pips{ $_->pips } }, $_->suit foreach $self->_cards;
 	return %pips;
 }
 
-sub unique_pips {
+sub _unique_pips {
 	my $self = shift;
 	my %seen;
 	my %part = map { $_ => [] } qw/l x h c a/;
-	my @uniq = grep !$seen{ $_->pips }++, $self->cards;
+	my @uniq = grep !$seen{ $_->pips }++, $self->_cards;
 	push @{ $part{ $_->rank } }, $_->pips foreach @uniq;
 	return %part;
 }
@@ -69,30 +69,30 @@ use Object::Attribute::Cached
 
 sub _flush_score {
 	my $self   = shift;
-	my %suited = $self->by_suit;
+	my %suited = $self->_by_suit;
 	my $score  = 0;
 	foreach my $suit (keys %suited) {
 		my @cards = @{ $suited{$suit} };
 		next unless @cards > 1;
-		$score += $self->flush_pts($cards[0]);
+		$score += $self->_flush_pts($cards[0]);
 		$score -= 2 if @cards == 4;
 	}
 	$score;
 }
 
-sub pair_pts  { (0, 0, 4, 4, 4, 4, 4, 4, 4, 5,   6,   6, 7,   8, 9)[ $_[1] ] }
-sub flush_pts { (0, 0, 1, 1, 1, 1, 1, 1, 1, 1.5, 1.5, 2, 2.5, 3, 4)[ $_[1] ] }
+sub _pair_pts  { (0, 0, 4, 4, 4, 4, 4, 4, 4, 5,   6,   6, 7,   8, 9)[ $_[1] ] }
+sub _flush_pts { (0, 0, 1, 1, 1, 1, 1, 1, 1, 1.5, 1.5, 2, 2.5, 3, 4)[ $_[1] ] }
 
 sub _pair_score {
 	my $self = shift;
-	my %pips = $self->by_pips;
-	(sum map $self->pair_pts($_), grep @{ $pips{$_} } == 2, keys %pips) || 0;
+	my %pips = $self->_by_pips;
+	(sum map $self->_pair_pts($_), grep @{ $pips{$_} } == 2, keys %pips) || 0;
 }
 
 sub _straight_score {
 	my $self = shift;
 	my %seen;
-	my @run = grep !$seen{$_}++, map $_->pips, $self->cards;
+	my @run = grep !$seen{$_}++, map $_->pips, $self->_cards;
 	return Games::Poker::Omaha::Hutchison::StraightScorer->new(@run)->score;
 }
 
@@ -209,6 +209,8 @@ http://www.thepokerforum.com/omahasystem.htm
 
 =head1 CONSTRUCTOR
 
+=head2 new
+
 	my $evaluator = Games::Poker::Omaha::Hutchison->new("Ah Qd Ts 3d");
 
 This takes 4 cards, expresed as a single string. The 'pip value' of the
@@ -225,13 +227,38 @@ This figure is roughly equivalent to the percentage chance of this
 turning into a winning hand in a 10 player game, where each player plays
 until the end. See the URL above for more information.
 
+=head2 flush_score / pair_score / straight_score
+
+The final hand_score() is made up from three component scores, for
+suited cards, paired cards, and straight cards. These component scores
+can also be accessed individually.
+
 =head1 AUTHOR
 
-Tony Bowden <tony@tmtm.com>, based on the rules created by Edward
-Hutchison.
+Tony Bowden, based on the rules created by Edward Hutchison.
 
-=head1 LICENSE
+=head1 BUGS and QUERIES
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+Please direct all correspondence regarding this module to:
+  bug-Games-Poker-Omaha-Hutchison@rt.cpan.org
+
+=head1 COPYRIGHT AND LICENSE
+
+  Copyright (C) 2004-2005 Tony Bowden.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License; either version
+  2 of the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+=head1 SEE ALSO
+
+This is based on the version at http://www.thepokerforum.com/omahasystem.htm
+
+An alternative version is available at http://erh.homestead.com/omaha.html
+
+
 
